@@ -1,8 +1,8 @@
 import socket, time # standard libraries
 import shared_functions # my own library
+from statistics import mean
 
 # TCPenis?
-
 PACKET_SIZE = 1024
 SEQ_ID_SIZE = 4
 MESSAGE_SIZE = PACKET_SIZE - SEQ_ID_SIZE
@@ -16,11 +16,9 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
     udp_socket.settimeout(1)
     
     # variable declaration
-    cwnd = 3 
-    ssthresh = 9999999 # starts as infinity
+    cwnd = 2
     messages, packet_delays, ack_count = {}, {}, {}
-    increase = True # True = exponential increase, False = exponential decrease
-    
+    cwnd_list = []    
     last_seq_id, messages, packet_delays = shared_functions.create_messages(data)
         
     # loop while still unreceived acks pending
@@ -45,22 +43,22 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
                     packet_delays[min(messages.keys())]['received'] = time.time()
                     messages.pop(min(messages.keys()))     
 
-                # check if phases need to be switched 
-                # 3 dupes (packet loss) => exp decrease
-                if ack_count[ack_id] >= 3: # exp increase => exp decrease
-                    ssthresh = cwnd / 2
-                    increase = False
-                    # immediately resend the dropped packet
+                # triplicate ack => packet loss
+                if ack_count[ack_id] >= 3:
+                    cwnd /= 2
+                    cwnd_list.append(cwnd)
+                    cwnd = mean(cwnd)
                     udp_socket.sendto(messages[ack_id], ('localhost', 5001))
-                elif cwnd < ssthresh: # exp decrease => exp increase
-                    increase = True
-
-                # implement congestion control according to phase
-                cwnd *= 2 if increase else 0.5
+                else:
+                    # raise cwnd
+                    cwnd *= 2
 
             except socket.timeout:
-                ssthresh = cwnd / 2
-                increase = False
+                cwnd /= 2
+                cwnd_list.append(cwnd)
+                cwnd = mean(cwnd)
+                udp_socket.sendto(messages[ack_id], ('localhost', 5001))
+
 
     shared_functions.closing_sequence(last_seq_id, udp_socket)
     end_time = time.time()

@@ -1,13 +1,12 @@
-import socket, time, statistics, sys
+import socket, time # standard libraries
+import shared_functions # my own library
 
 PACKET_SIZE = 1024
 SEQ_ID_SIZE = 4
 MESSAGE_SIZE = PACKET_SIZE - SEQ_ID_SIZE
 WINDOW_SIZE = 100
 
-# read the song
-with open('file.mp3', 'rb') as f:
-    data = f.read()
+data = shared_functions.get_song_file()
  
 # create a udp socket
 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
@@ -15,59 +14,38 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
     udp_socket.bind(("localhost", 5000))
     udp_socket.settimeout(1)
     
-    cur_seq_id = 0
-    messages = {}
-    packet_delays = {}
-    
-    # create all messages
-    # key = seq id, value = message to send
-    while cur_seq_id < sys.getsizeof(data):
-        msg = int.to_bytes(cur_seq_id, SEQ_ID_SIZE, byteorder='big', signed=True) + data[cur_seq_id : cur_seq_id + MESSAGE_SIZE]
-        messages[cur_seq_id] = msg
-        packet_delays[cur_seq_id] = {'sent': 0, 'received': 0}
-        cur_seq_id += MESSAGE_SIZE
+    last_seq_id, messages, packet_delays = shared_functions.create_messages(data)
+
+    # send first 100 msgs
+    for i in list(messages.keys())[:100]:
+        udp_socket.sendto(messages[i], ('localhost', 5001))
+        packet_delays[i]['sent'] = time.time()
         
     # can keep sending as long as there are messages
-    while len(messages) != 0:
-        # send 100 msgs at a time
-        for i in list(messages.keys())[:100]:
-            udp_socket.sendto(messages[i], ('localhost', 5001))
-            packet_delays[i]['sent'] = time.time()
+    while True:
+        try:
+            # get ack and its id
+            ack, _ = udp_socket.recvfrom(PACKET_SIZE)
+            ack_id = int.from_bytes(ack[:SEQ_ID_SIZE], signed=True, byteorder='big')
+            print(ack_id, ack[SEQ_ID_SIZE:])
 
-            try:
-                # get ack and its id
-                ack, _ = udp_socket.recvfrom(PACKET_SIZE)
-                ack_id = int.from_bytes(ack[:SEQ_ID_SIZE], byteorder='big')
-                print(ack_id, ack[SEQ_ID_SIZE:])
+            # remove packet from dictionary if ack is recieved in order
+            if len(messages) == 1 or ack_id == list(messages.keys())[1]:
+                packet_delays[min(messages.keys())]['received'] = time.time()
+                messages.pop(min(messages.keys()))
 
-                # remove packet from dictionary if ack is recieved in order
-                # automatically takes care of dupe acks since it's already removed from dict
-                if len(messages) == 1 or ack_id == list(messages.keys())[1]:
-                    packet_delays[min(messages.keys())]['received'] = time.time()
-                    messages.pop(min(messages.keys()))                    
+                # exit loop if no more messages to send
+                if len(messages) == 0:
+                    break
 
-            # go to top of loop and resend new packet window if timeout
-            except socket.timeout:
-                continue
+                # shift window upon successful ack
+                udp_socket.sendto(messages[min(messages.keys())], ('localhost', 5001))
+                packet_delays[min(messages.keys())]['sent'] = time.time()
+
+        except socket.timeout:
+            continue
+            # print("Timeout error => resending ... ")
         
-    # send final closing message
-    packet_delays['fin'] = {'sent': 0, 'received': 0}
-    packet_delays['fin']['sent'] = time.time()
-    udp_socket.sendto(int.to_bytes(-1, 4, signed=True, byteorder='big'), ('localhost', 5001))
-    packet_delays['fin']['received'] = time.time()
-
-    # calculate throughput
+    shared_functions.closing_sequence(last_seq_id, udp_socket)
     end_time = time.time()
-    throughput = len(data) / (end_time - start_time)
-    print(f"Throughput: {throughput:.2f} bytes per second")
-
-    # calculate avg packet delay
-    delays = []
-    for k in packet_delays.keys():
-        delays.append(packet_delays[k]['received'] - packet_delays[k]['sent'])
-    avg_packet_delay = statistics.mean(delays)
-    print(f"Average packet delay: {avg_packet_delay:.2f} seconds")
-
-    # calculate performance metric
-    performance = throughput / avg_packet_delay
-    print(f"Performance metric: {performance:.2f}")
+    shared_functions.get_metrics(start_time, end_time, data, packet_delays)

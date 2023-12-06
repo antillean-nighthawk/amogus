@@ -44,15 +44,15 @@ def closing_sequence(cur_seq_id, udp_socket):
 def get_metrics(start_time, end_time, data, packet_delays):
     # calculate throughput
     throughput = len(data) / (end_time - start_time)
-    print(f"Throughput: {throughput:.2f},")
+    print(f"{throughput:.2f},")
 
     # calculate avg packet delay
     delays = []
     for k in packet_delays.keys():
         delays.append(packet_delays[k]['received'] - packet_delays[k]['sent'])
     avg_packet_delay = statistics.mean(delays)
-    print(f"Average packet delay: {avg_packet_delay:.2f},")
+    print(f"{avg_packet_delay:.2f},")
 
     # calculate performance metric
     performance = throughput / avg_packet_delay
-    print(f"Performance metric: {performance:.2f},")
+    print(f"{performance:.2f},")

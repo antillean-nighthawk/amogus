@@ -2,6 +2,11 @@ import statistics, sys
 
 # this library is to store all repetitive functions so I can focus on developing protocols
 
+# globals
+PACKET_SIZE = 1024
+SEQ_ID_SIZE = 4
+MESSAGE_SIZE = PACKET_SIZE - SEQ_ID_SIZE
+
 # read the song file
 def get_song_file():
     with open('file.mp3', 'rb') as f:

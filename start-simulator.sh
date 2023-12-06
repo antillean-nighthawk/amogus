@@ -19,9 +19,9 @@ docker run --name="ecs152a-simulator" \
     ecs152a/simulator &
 
 # change below as needed
-sleep 2
+sleep 1
 
 # echo "=== SLIDING WINDOW ===" >> output.txt
-time python3 sliding-window.py
+time python3 sender_reno.py
 
 docker stop "ecs152a-simulator"

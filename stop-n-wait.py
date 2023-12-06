@@ -29,7 +29,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
 
             # remove packet from dictionary if ack is recieved in order
             # handles packets 1 at a time, only looks at next packet in the list
-            if ack_id == list(messages.keys())[1] or len(messages) == 1:
+            if len(messages) == 1 or ack_id == list(messages.keys())[1]:
                 packet_delays[min(messages.keys())]['received'] = time.time()
                 messages.pop(min(messages.keys()))
 
